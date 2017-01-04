@@ -1,10 +1,12 @@
 const bodyParser = require('body-parser');
 const express = require('express');
 const mongoose = require('mongoose');
+const passport = require('passport');
+const {BasicStrategy} = require('passport-http');
 const morgan = require('morgan');
 
 const {DATABASE_URL, PORT} = require('./config');
-const {BlogPost} = require('./models');
+const {BlogPost, User} = require('./models');
 
 const app = express();
 
@@ -13,6 +15,74 @@ app.use(bodyParser.json());
 
 mongoose.Promise = global.Promise;
 
+const strategy = new BasicStrategy(function(username, password, callback) {
+  let user;
+  User
+    .findOne({username: username})
+    .exec()
+    .then(_user => {
+      user = _user;
+      if (!user) {
+        return callback(null, false, {message: 'Incorrect username'});
+      }
+      return user.validatePassword(password);
+    })
+    .then(isValid => {
+      if (!isValid) {
+        return callback(null, false, {message: 'Incorrect password'});
+      }
+      else {
+        return callback(null, user)
+      }
+    });
+});
+
+passport.use(strategy);
+
+
+app.post('/users', (req, res) => {
+  const requiredFields = ['username', 'password', 'firstName', 'lastName'];
+
+  const missingIndex = requiredFields.findIndex(field => !req.body[field]);
+  if (missingIndex != -1) {
+    return res.status(400).json({
+      message: `Missing field: ${requiredFields[missingIndex]}`
+    });
+  }
+
+  let {username, password, firstName, lastName} = req.body;
+
+  username = username.trim();
+  password = password.trim();
+
+  // check for existing user
+  return User
+    .find({username})
+    .count()
+    .exec()
+    .then(count => {
+      if (count > 0) {
+        return res.status(422).json({message: 'username already taken'});
+      }
+      // if no existing user, hash password
+      return User.hashPassword(password)
+    })
+    .then(hash => {
+      return User
+        .create({
+          username,
+          password: hash,
+          firstName,
+          lastName
+        })
+    })
+    .then(user => {
+      return res.status(201).json(user.apiRepr());
+    })
+    .catch(err => {
+      res.status(500).json({message: 'Internal server error'})
+    });
+});
 
 app.get('/posts', (req, res) => {
   BlogPost
@@ -38,8 +108,10 @@ app.get('/posts/:id', (req, res) => {
     });
 });
 
-app.post('/posts', (req, res) => {
-  const requiredFields = ['title', 'content', 'author'];
+app.post('/posts',
+  passport.authenticate('basic', {session: false}),
+  (req, res) => {
+  const requiredFields = ['title', 'content'];
   requiredFields.forEach(field => {
     if (!(field in req.body)) {
       res.status(400).json(
@@ -50,18 +122,22 @@ app.post('/posts', (req, res) => {
     .create({
       title: req.body.title,
       content: req.body.content,
-      author: req.body.author
+      author: {
+        firstName: req.user.firstName,
+        lastName: req.user.lastName
+      }
     })
     .then(blogPost => res.status(201).json(blogPost.apiRepr()))
     .catch(err => {
         console.error(err);
         res.status(500).json({error: 'Something went wrong'});
     });
-
 });
 
 
-app.delete('/posts/:id', (req, res) => {
+app.delete('/posts/:id',
+  passport.authenticate('basic', {session: false}),
+  (req, res) => {
   BlogPost
     .findByIdAndRemove(req.params.id)
     .exec()
@@ -75,7 +151,9 @@ app.delete('/posts/:id', (req, res) => {
 });
 
 
-app.put('/posts/:id', (req, res) => {
+app.put('/posts/:id',
+  passport.authenticate('basic', {session: false}),
+  (req, res) => {
   if (!(req.params.id && req.body.id && req.params.id === req.body.id)) {
     res.status(400).json({
       error: 'Request path id and request body id values must match'
@@ -83,7 +161,7 @@ app.put('/posts/:id', (req, res) => {
   }
 
   const updated = {};
-  const updateableFields = ['title', 'content', 'author'];
+  const updateableFields = ['title', 'content'];
   updateableFields.forEach(field => {
     if (field in req.body) {
       updated[field] = req.body[field];
@@ -95,17 +173,6 @@ app.put('/posts/:id', (req, res) => {
     .exec()
     .then(updatedPost => res.status(201).json(updatedPost.apiRepr()))
     .catch(err => res.status(500).json({message: 'Something went wrong'}));
-});
-
-
-app.delete('/:id', (req, res) => {
-  BlogPosts
-    .findByIdAndRemove(req.params.id)
-    .exec()
-    .then(() => {
-      console.log(`Deleted blog post with id \`${req.params.ID}\``);
-      res.status(204).end();
-    });
 });
 
 

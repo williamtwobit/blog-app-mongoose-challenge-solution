@@ -8,10 +8,13 @@
     "test": "mocha"
   },
   "dependencies": {
+    "bcryptjs": "^2.4.0",
     "body-parser": "^1.15.2",
     "express": "^4.12.4",
     "mongoose": "^4.7.1",
-    "morgan": "^1.7.0"
+    "morgan": "^1.7.0",
+    "passport": "^0.3.2",
+    "passport-http": "^0.3.0"
   },
   "keywords": [
     "node",
