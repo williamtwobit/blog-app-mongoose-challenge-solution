@@ -8,11 +8,19 @@ const mongoose = require('mongoose');
 const should = chai.should();
 
 const {DATABASE_URL} = require('../config');
-const {BlogPost} = require('../models');
+const {BlogPost, User} = require('../models');
 const {closeServer, runServer, app} = require('../server');
 const {TEST_DATABASE_URL} = require('../config');
 
 chai.use(chaiHttp);
+
+const USER = {
+  username: faker.internet.userName(),
+  unhashedPassword: 'test',
+  password: '$2a$10$mjFeHXylKADWX8/HCsOQAu418D.VDL6.tjpgGUH82BrS8XMOecVuW',
+  firstName: faker.name.firstName(),
+  lastName: faker.name.lastName()
+};
 
 // this function deletes the entire database.
 // we'll call it in an `afterEach` block below
@@ -26,7 +34,6 @@ function tearDownDb() {
       .catch(err => reject(err))
   });
 }
-
 
 // used to put randomish documents in db
 // so we have data to work with and assert about.
@@ -50,6 +57,10 @@ function seedBlogPostData() {
   return BlogPost.insertMany(seedData);
 }
 
+function seedUser() {
+  return User.create(USER);
+}
+
 
 describe('blog posts API resource', function() {
 
@@ -58,7 +69,7 @@ describe('blog posts API resource', function() {
   });
 
   beforeEach(function() {
-    return seedBlogPostData();
+    return Promise.all([seedBlogPostData(), seedUser()]);
   });
 
   afterEach(function() {
@@ -136,18 +147,14 @@ describe('blog posts API resource', function() {
     // right keys, and that `id` is there (which means
     // the data was inserted into db)
     it('should add a new blog post', function() {
-
       const newPost = {
           title: faker.lorem.sentence(),
-          author: {
-            firstName: faker.name.firstName(),
-            lastName: faker.name.lastName(),
-          },
           content: faker.lorem.text()
       };
 
       return chai.request(app)
         .post('/posts')
+        .auth(USER.username, USER.unhashedPassword)
         .send(newPost)
         .then(function(res) {
           res.should.have.status(201);
@@ -159,15 +166,15 @@ describe('blog posts API resource', function() {
           // cause Mongo should have created id on insertion
           res.body.id.should.not.be.null;
           res.body.author.should.equal(
-            `${newPost.author.firstName} ${newPost.author.lastName}`);
+            `${USER.firstName} ${USER.lastName}`);
           res.body.content.should.equal(newPost.content);
           return BlogPost.findById(res.body.id).exec();
         })
         .then(function(post) {
           post.title.should.equal(newPost.title);
           post.content.should.equal(newPost.content);
-          post.author.firstName.should.equal(newPost.author.firstName);
-          post.author.lastName.should.equal(newPost.author.lastName);
+          post.author.firstName.should.equal(USER.firstName);
+          post.author.lastName.should.equal(USER.lastName);
         });
     });
   });
@@ -182,21 +189,20 @@ describe('blog posts API resource', function() {
     it('should update fields you send over', function() {
       const updateData = {
         title: 'cats cats cats',
-        content: 'dogs dogs dogs',
-        author: {
-          firstName: 'foo',
-          lastName: 'bar'
-        }
+        content: 'dogs dogs dogs'
       };
 
+      let oldPost;
       return BlogPost
         .findOne()
         .exec()
-        .then(post => {
-          updateData.id = post.id;
+        .then(_oldPost => {
+          oldPost = _oldPost;
+          updateData.id = oldPost.id;
 
           return chai.request(app)
-            .put(`/posts/${post.id}`)
+            .put(`/posts/${oldPost.id}`)
+            .auth(USER.username, USER.unhashedPassword)
             .send(updateData);
         })
         .then(res => {
@@ -205,17 +211,18 @@ describe('blog posts API resource', function() {
           res.body.should.be.a('object');
           res.body.title.should.equal(updateData.title);
           res.body.author.should.equal(
-            `${updateData.author.firstName} ${updateData.author.lastName}`);
+            `${oldPost.author.firstName} ${oldPost.author.lastName}`);
           res.body.content.should.equal(updateData.content);
 
           return BlogPost.findById(res.body.id).exec();
         })
         .then(post => {
+          console.log(post.title);
           post.title.should.equal(updateData.title);
           post.content.should.equal(updateData.content);
-          post.author.firstName.should.equal(updateData.author.firstName);
-          post.author.lastName.should.equal(updateData.author.lastName);
-        });
+          post.author.firstName.should.equal(oldPost.author.firstName);
+          post.author.lastName.should.equal(oldPost.author.lastName);
+        })
     });
   });
 
@@ -234,7 +241,9 @@ describe('blog posts API resource', function() {
         .exec()
         .then(_post => {
           post = _post;
-          return chai.request(app).delete(`/posts/${post.id}`);
+          return chai.request(app)
+            .delete(`/posts/${post.id}`)
+            .auth(USER.username, USER.unhashedPassword);
         })
         .then(res => {
           res.should.have.status(204);
