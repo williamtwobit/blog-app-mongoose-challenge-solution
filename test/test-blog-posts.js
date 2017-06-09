@@ -1,3 +1,4 @@
+'use strict';
 const chai = require('chai');
 const chaiHttp = require('chai-http');
 const faker = require('faker');
@@ -23,7 +24,7 @@ function tearDownDb() {
     console.warn('Deleting database');
     mongoose.connection.dropDatabase()
       .then(result => resolve(result))
-      .catch(err => reject(err))
+      .catch(err => reject(err));
   });
 }
 
@@ -62,12 +63,6 @@ function seedUserData(){
   return User.create(fakeUser);
 }
 
-function seed(){
-  return seedUserData()
-  .then((usr)=> seedBlogPostData(usr));
-}
-
-
 describe('blog posts API resource', function() {
 
   before(function() {
@@ -75,7 +70,7 @@ describe('blog posts API resource', function() {
   });
 
   beforeEach(function() {
-    return seed();
+    return Promise.all([seedBlogPostData(),seedUserData()]);
   });
 
   afterEach(function() {
@@ -155,12 +150,12 @@ describe('blog posts API resource', function() {
     it('should add a new blog post', function() {
 
       const newPost = {
-          title: faker.lorem.sentence(),
-          author: {
-            firstName: 'Kyle',
-            lastName: 'S',
-          },
-          content: faker.lorem.text()
+        title: faker.lorem.sentence(),
+        author: {
+          firstName: 'Kyle',
+          lastName: 'S',
+        },
+        content: faker.lorem.text()
       };
 
       return chai.request(app)
@@ -202,8 +197,8 @@ describe('blog posts API resource', function() {
         title: 'cats cats cats',
         content: 'dogs dogs dogs',
         author: {
-          firstName: 'foo',
-          lastName: 'bar'
+          firstName: 'Kyle',
+          lastName: 'S'
         }
       };
 
@@ -215,6 +210,7 @@ describe('blog posts API resource', function() {
 
           return chai.request(app)
             .put(`/posts/${post.id}`)
+            .auth('testboy', 'AliensExist')
             .send(updateData);
         })
         .then(res => {
@@ -252,7 +248,7 @@ describe('blog posts API resource', function() {
         .exec()
         .then(_post => {
           post = _post;
-          return chai.request(app).delete(`/posts/${post.id}`);
+          return chai.request(app).delete(`/posts/${post.id}`).auth('testboy', 'AliensExist');
         })
         .then(res => {
           res.should.have.status(204);
@@ -265,6 +261,44 @@ describe('blog posts API resource', function() {
           // make assertions about a null value.
           should.not.exist(_post);
         });
+    });
+  });
+});
+describe('user API',function(){
+  before(function(){
+    return runServer(TEST_DATABASE_URL);
+  });
+  beforeEach(function(){
+    return seedUserData();
+  });
+  afterEach(function(){
+    return tearDownDb();
+  });
+  after(function(){
+    return closeServer();
+  });
+  it('check if /users POST endpoint correctly adds a user to database',function(){
+    const newUser = {
+      username:'testboy2',
+      password:'hi',
+      firstName:'William',
+      lastName:'twobit'
+    };
+    return chai
+    .post('/users')
+    .send(newUser)
+    .then(function(res){
+      res.should.be.json;
+      res.should.be.status(201);
+      res.body.should.be.a('object');
+      res.body.should.include.keys(['username', 'firstName', 'lastName']);
+      res.body.username.should.equal(newUser.username);
+      res.body.firstName.should.equal(newUser.firstName);
+      res.body.lastName.should.equal(newUser.lastName);
+      return User.findOne(res.body.username).exec();
+    })
+    .then(dataRes=>{
+      console.log(dataRes);
     });
   });
 });
