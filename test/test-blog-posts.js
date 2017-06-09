@@ -184,6 +184,24 @@ describe('blog posts API resource', function() {
           post.author.lastName.should.equal(newPost.author.lastName);
         });
     });
+    it('test when post auth is wrong',function(){
+      const newPost = {
+        title: faker.lorem.sentence(),
+        author: {
+          firstName: 'Kyle',
+          lastName: 'S',
+        },
+        content: faker.lorem.text()
+      };
+
+      return chai.request(app)
+        .post('/posts')
+        .auth('testboy', 'AliensExista')
+        .send(newPost)
+        .catch(err =>{
+          err.should.have.status(401);
+        });
+    });
   });
 
   describe('PUT endpoint', function() {
@@ -232,6 +250,41 @@ describe('blog posts API resource', function() {
           post.author.lastName.should.equal(updateData.author.lastName);
         });
     });
+    it('test when put auth is wrong',function(){
+      const updatedPost = {
+        title: faker.lorem.sentence(),
+        author: {
+          firstName: 'Kyle',
+          lastName: 'S',
+        },
+        content: faker.lorem.text()
+      };
+
+      return chai.request(app)
+        .post('/posts')
+        .auth('t', 'A')
+        .send(updatedPost)
+        .catch(err =>{
+          err.should.have.status(401);
+        });
+    });
+    it('test when put auth 2 is wrong',function(){
+      const newPost = {
+        title: faker.lorem.sentence(),
+        author: {
+          firstName: 'Kyle',
+          lastName: 'S',
+        },
+        content: faker.lorem.text()
+      };
+
+      return chai.request(app)
+        .post('/posts')
+        .send(newPost)
+        .catch(err =>{
+          err.should.have.status(401);
+        });
+    });
   });
 
   describe('DELETE endpoint', function() {
@@ -261,6 +314,24 @@ describe('blog posts API resource', function() {
           // an error. `should.be.null(_post)` is how we can
           // make assertions about a null value.
           should.not.exist(_post);
+        });
+    });
+    it('test when delete auth is wrong',function(){
+      const newPost = {
+        title: faker.lorem.sentence(),
+        author: {
+          firstName: 'Kyle',
+          lastName: 'S',
+        },
+        content: faker.lorem.text()
+      };
+
+      return chai.request(app)
+        .post('/posts')
+        .auth('', 'AliensExista')
+        .send(newPost)
+        .catch(err =>{
+          err.should.have.status(401);
         });
     });
   });
