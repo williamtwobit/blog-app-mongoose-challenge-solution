@@ -8,7 +8,7 @@ const mongoose = require('mongoose');
 const should = chai.should();
 
 const {DATABASE_URL} = require('../config');
-const {BlogPost} = require('../models');
+const {BlogPost, User} = require('../models');
 const {closeServer, runServer, app} = require('../server');
 const {TEST_DATABASE_URL} = require('../config');
 
@@ -33,14 +33,14 @@ function tearDownDb() {
 // we use the Faker library to automatically
 // generate placeholder values for author, title, content
 // and then we insert that data into mongo
-function seedBlogPostData() {
+function seedBlogPostData(user) {
   console.info('seeding blog post data');
   const seedData = [];
   for (let i=1; i<=10; i++) {
     seedData.push({
       author: {
-        firstName: faker.name.firstName(),
-        lastName: faker.name.lastName()
+        firstName: user.firstName,
+        lastName: user.lastName
       },
       title: faker.lorem.sentence(),
       content: faker.lorem.text()
@@ -48,6 +48,23 @@ function seedBlogPostData() {
   }
   // this will return a promise
   return BlogPost.insertMany(seedData);
+}
+
+function seedUserData(){
+  console.info('seeding a dummy user');
+  const fakeUser = {
+    username: 'testboy',
+    password: '$2a$10$eilG9Rox/41Sg6l./2rjLOLnE2E/FpoEcF7Ji4CdZDBPiTKHmSuOy',
+    // password in plain text: AliensExist
+    firstName: 'Kyle',
+    lastName: 'S'
+  };
+  return User.create(fakeUser);
+}
+
+function seed(){
+  return seedUserData()
+  .then((usr)=> seedBlogPostData(usr));
 }
 
 
@@ -58,7 +75,7 @@ describe('blog posts API resource', function() {
   });
 
   beforeEach(function() {
-    return seedBlogPostData();
+    return seed();
   });
 
   afterEach(function() {
@@ -140,14 +157,15 @@ describe('blog posts API resource', function() {
       const newPost = {
           title: faker.lorem.sentence(),
           author: {
-            firstName: faker.name.firstName(),
-            lastName: faker.name.lastName(),
+            firstName: 'Kyle',
+            lastName: 'S',
           },
           content: faker.lorem.text()
       };
 
       return chai.request(app)
         .post('/posts')
+        .auth('testboy', 'AliensExist')
         .send(newPost)
         .then(function(res) {
           res.should.have.status(201);
