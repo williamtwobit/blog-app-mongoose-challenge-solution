@@ -70,7 +70,8 @@ describe('blog posts API resource', function() {
   });
 
   beforeEach(function() {
-    return Promise.all([seedBlogPostData(),seedUserData()]);
+    return seedUserData()
+    .then(usr=> seedBlogPostData(usr));
   });
 
   afterEach(function() {
@@ -284,7 +285,7 @@ describe('user API',function(){
       firstName:'William',
       lastName:'twobit'
     };
-    return chai
+    return chai.request(app)
     .post('/users')
     .send(newUser)
     .then(function(res){
@@ -295,10 +296,13 @@ describe('user API',function(){
       res.body.username.should.equal(newUser.username);
       res.body.firstName.should.equal(newUser.firstName);
       res.body.lastName.should.equal(newUser.lastName);
-      return User.findOne(res.body.username).exec();
+      return User.findOne({username: res.body.username}).exec();
     })
     .then(dataRes=>{
-      console.log(dataRes);
-    });
+      return dataRes.validatePassword('hi')
+    })
+    .then(res=> {
+      res.should.equal(true);
+    })
   });
 });
