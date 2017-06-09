@@ -299,10 +299,13 @@ describe('user API',function(){
       return User.findOne({username: res.body.username}).exec();
     })
     .then(dataRes=>{
-      return dataRes.validatePassword('hi')
+      dataRes.username.should.equal(newUser.username);
+      dataRes.lastName.should.equal(newUser.lastName);
+      dataRes.firstName.should.equal(newUser.firstName);
+      return dataRes.validatePassword('hi');
     })
     .then(res=> {
       res.should.equal(true);
-    })
+    });
   });
 });
